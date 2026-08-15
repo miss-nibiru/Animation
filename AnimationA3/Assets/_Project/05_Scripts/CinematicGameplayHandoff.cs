@@ -13,6 +13,7 @@ public class CinematicGameplayHandoff : MonoBehaviour
     [Header("Gameplay Starting Position")]
     [SerializeField] private Transform gameplayStartPoint;
 
+    [SerializeField] private FixedAngleCameraFollow gameplayCameraFollow;
     private void OnEnable()
     {
         timelineDirector.stopped += BeginGameplay;
@@ -42,5 +43,6 @@ public class CinematicGameplayHandoff : MonoBehaviour
 
         cinematicCharacter.SetActive(false);
         gameplayCharacter.SetActive(true);
+        gameplayCameraFollow.BeginFollowing();
     }
 }

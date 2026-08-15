@@ -10332,6 +10332,7 @@ MonoBehaviour:
   cinematicCharacter: {fileID: 423940698}
   gameplayCharacter: {fileID: 2133253250}
   gameplayStartPoint: {fileID: 1836886144}
+  gameplayCameraFollow: {fileID: 989620627}
 --- !u!1001 &748399772
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -14657,6 +14658,7 @@ GameObject:
   - component: {fileID: 989620624}
   - component: {fileID: 989620625}
   - component: {fileID: 989620626}
+  - component: {fileID: 989620627}
   m_Layer: 0
   m_Name: CAM_GAMEPLAY001
   m_TagString: Untagged
@@ -14744,6 +14746,20 @@ Animator:
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
   m_WriteDefaultValuesOnDisable: 0
+--- !u!114 &989620627
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 989620623}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a7b6efeadcb641bead1819e1edd6408, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FixedAngleCameraFollow
+  target: {fileID: 4186250172383505561}
+  followSmoothness: 8
 --- !u!1001 &990659231
 PrefabInstance:
   m_ObjectHideFlags: 0

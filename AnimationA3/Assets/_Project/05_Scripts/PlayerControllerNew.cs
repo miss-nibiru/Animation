@@ -47,9 +47,8 @@ public class PlayerControllerNew : MonoBehaviour
 
         // Physics must never rotate the player collider.
         _rigidbody.constraints =
-            RigidbodyConstraints.FreezeRotationX |
-            RigidbodyConstraints.FreezeRotationY |
-            RigidbodyConstraints.FreezeRotationZ;
+            RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+        
     }
 
     private void OnEnable()
@@ -127,12 +126,14 @@ public class PlayerControllerNew : MonoBehaviour
                 Vector3.up
             );
 
-        characterVisual.rotation =
+        Quaternion smoothRotation =
             Quaternion.Slerp(
-                characterVisual.rotation,
+                _rigidbody.rotation,
                 targetRotation,
                 rotationSpeed * Time.fixedDeltaTime
             );
+
+        _rigidbody.MoveRotation(smoothRotation);
     }
 
     private void HandleJump()
