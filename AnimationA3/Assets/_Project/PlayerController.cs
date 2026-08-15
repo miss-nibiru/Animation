@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(CharacterController))]
-public class PlayerControllerNew : MonoBehaviour
+public class PlayerController : MonoBehaviour
 {
     private static readonly int Speed = Animator.StringToHash("Speed");
 

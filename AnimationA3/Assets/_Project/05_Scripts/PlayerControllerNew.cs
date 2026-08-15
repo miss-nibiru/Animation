@@ -1,82 +1,186 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
- 
-public class PlayerController : MonoBehaviour
+
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(CapsuleCollider))]
+public class PlayerControllerNew : MonoBehaviour
 {
-    [SerializeField] float movementSpeed;
-    [SerializeField] float rotationSpeed;
-    [SerializeField] float runningSpeedMulitplier;
- 
-    [SerializeField] Transform cameraTransform;
- 
-    [SerializeField] InputActionReference moveInputAction;
-    [SerializeField] InputActionReference runInputAction;
- 
-    Vector2 moveInput;
- 
-    Rigidbody rb;
- 
-    Animator anim;
- 
-    float activeRunningSpeedMultiplier = 1f;
- 
-    readonly int walkingAnimatorHash = Animator.StringToHash("Walking");
-    readonly int runningAnimatorHash = Animator.StringToHash("Running");
- 
-    void Start()
+    [Header("Movement")]
+    [SerializeField] private float movementSpeed = 5f;
+    [SerializeField] private float rotationSpeed = 12f;
+    [SerializeField] private float jumpForce = 6f;
+
+    [Header("References")]
+    [SerializeField] private Transform cameraTransform;
+    [SerializeField] private Transform characterVisual;
+    [SerializeField] private Animator playerAnimator;
+
+    [Header("Input")]
+    [SerializeField] private InputActionReference moveInputAction;
+    [SerializeField] private InputActionReference jumpInputAction;
+
+    [Header("Ground Detection")]
+    [SerializeField] private float groundCheckDistance = 0.15f;
+    [SerializeField] private LayerMask groundLayers = ~0;
+
+    private Rigidbody _rigidbody;
+    private CapsuleCollider _capsuleCollider;
+
+    private Vector2 _moveInput;
+    private bool _jumpRequested;
+
+    private static readonly int Walking =
+        Animator.StringToHash("Walking");
+
+    private static readonly int Running =
+        Animator.StringToHash("Running");
+
+    private void Awake()
     {
-        rb = GetComponent<Rigidbody>();
-        anim = GetComponent<Animator>();
+        _rigidbody = GetComponent<Rigidbody>();
+        _capsuleCollider = GetComponent<CapsuleCollider>();
+
+        _rigidbody.useGravity = true;
+        _rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
+        _rigidbody.collisionDetectionMode =
+            CollisionDetectionMode.Continuous;
+
+        // Physics must never rotate the player collider.
+        _rigidbody.constraints =
+            RigidbodyConstraints.FreezeRotationX |
+            RigidbodyConstraints.FreezeRotationY |
+            RigidbodyConstraints.FreezeRotationZ;
     }
- 
-    void Update()
+
+    private void OnEnable()
     {
-       moveInput = moveInputAction.action.ReadValue<Vector2>();
+        moveInputAction.action.Enable();
+        jumpInputAction.action.Enable();
     }
- 
+
+    private void OnDisable()
+    {
+        moveInputAction.action.Disable();
+        jumpInputAction.action.Disable();
+    }
+
+    private void Update()
+    {
+        _moveInput =
+            moveInputAction.action.ReadValue<Vector2>();
+
+        if (jumpInputAction.action.WasPressedThisFrame())
+        {
+            _jumpRequested = true;
+        }
+
+        UpdateAnimation();
+    }
+
     private void FixedUpdate()
+    {
+        HandleMovement();
+        HandleJump();
+    }
+
+    private void HandleMovement()
     {
         Vector3 cameraForward = cameraTransform.forward;
         Vector3 cameraRight = cameraTransform.right;
- 
-        cameraForward.y = 0;
-        cameraRight.y = 0;
- 
+
+        cameraForward.y = 0f;
+        cameraRight.y = 0f;
+
         cameraForward.Normalize();
         cameraRight.Normalize();
- 
-        Vector3 moveDirection = cameraForward * moveInput.y + cameraRight * moveInput.x;
- 
-        Vector3 velocity = moveDirection * (movementSpeed * activeRunningSpeedMultiplier);
- 
-       rb.linearVelocity = new Vector3(velocity.x, rb.linearVelocity.y, velocity.z);
- 
-       //Checks if the character is moving
-        if (moveDirection == Vector3.zero)
+
+        Vector3 movementDirection =
+            cameraRight * _moveInput.x +
+            cameraForward * _moveInput.y;
+
+        if (movementDirection.sqrMagnitude > 1f)
         {
-            anim.SetBool(walkingAnimatorHash, false);
-            anim.SetBool(runningAnimatorHash, false);
-           return;
+            movementDirection.Normalize();
         }
- 
-        anim.SetBool(walkingAnimatorHash, true);
- 
-        //Checking if 'Shift' is being pressed to execute running. If not, then the characteris walking.
-        if (runInputAction.action.IsPressed())
+
+        Vector3 velocity =
+            movementDirection * movementSpeed;
+
+        velocity.y = _rigidbody.linearVelocity.y;
+
+        _rigidbody.linearVelocity = velocity;
+        _rigidbody.angularVelocity = Vector3.zero;
+
+        RotateVisual(movementDirection);
+    }
+
+    private void RotateVisual(Vector3 movementDirection)
+    {
+        if (movementDirection.sqrMagnitude < 0.001f)
         {
-            anim.SetBool(runningAnimatorHash, true);
-            activeRunningSpeedMultiplier = runningSpeedMulitplier;
+            return;
         }
-        else
+
+        Quaternion targetRotation =
+            Quaternion.LookRotation(
+                movementDirection,
+                Vector3.up
+            );
+
+        characterVisual.rotation =
+            Quaternion.Slerp(
+                characterVisual.rotation,
+                targetRotation,
+                rotationSpeed * Time.fixedDeltaTime
+            );
+    }
+
+    private void HandleJump()
+    {
+        if (!_jumpRequested)
         {
-           anim.SetBool(runningAnimatorHash, false);
-           activeRunningSpeedMultiplier = 1;
+            return;
         }
- 
-        Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
- 
-        Quaternion finalRotation = Quaternion.Slerp(rb.rotation, targetRotation, rotationSpeed);
- 
-        rb.MoveRotation(finalRotation);
+
+        _jumpRequested = false;
+
+        if (!IsGrounded())
+        {
+            return;
+        }
+
+        Vector3 velocity = _rigidbody.linearVelocity;
+        velocity.y = 0f;
+        _rigidbody.linearVelocity = velocity;
+
+        _rigidbody.AddForce(
+            Vector3.up * jumpForce,
+            ForceMode.Impulse
+        );
+    }
+
+    private bool IsGrounded()
+    {
+        Vector3 origin = _capsuleCollider.bounds.center;
+
+        float distance =
+            _capsuleCollider.bounds.extents.y +
+            groundCheckDistance;
+
+        return Physics.Raycast(
+            origin,
+            Vector3.down,
+            distance,
+            groundLayers,
+            QueryTriggerInteraction.Ignore
+        );
+    }
+
+    private void UpdateAnimation()
+    {
+        bool isWalking = _moveInput.sqrMagnitude > 0.01f;
+
+        playerAnimator.SetBool(Walking, isWalking);
+        playerAnimator.SetBool(Running, false);
     }
 }

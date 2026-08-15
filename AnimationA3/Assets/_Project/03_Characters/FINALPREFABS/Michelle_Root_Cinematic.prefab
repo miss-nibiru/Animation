@@ -2233,7 +2233,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1204984661300642236}
-  - component: {fileID: 8670256183791646329}
   - component: {fileID: 4458086052240926915}
   m_Layer: 0
   m_Name: Michelle_Root_Cinematic
@@ -2259,24 +2258,6 @@ Transform:
   - {fileID: 2372063078201867402}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
---- !u!114 &8670256183791646329
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8744060439367104941}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2bb3d508c41a44b729afb8d6a5bb1ffe, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerControllerNew
-  movementSpeed: 5
-  rotationSpeed: 0.5
-  runningSpeedMulitplier: 1
-  cameraTransform: {fileID: 0}
-  moveInputAction: {fileID: -1680190386980627800, guid: 052faaac586de48259a63d0c4782560b, type: 3}
-  runInputAction: {fileID: -7471211009204490832, guid: 052faaac586de48259a63d0c4782560b, type: 3}
 --- !u!95 &4458086052240926915
 Animator:
   serializedVersion: 7
