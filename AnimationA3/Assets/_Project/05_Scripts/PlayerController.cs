@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -8,6 +9,12 @@ public class PlayerController : MonoBehaviour
     [Header("Movement")]
     [SerializeField] private float walkSpeed = 3f;
     [SerializeField] private float runSpeed = 6f;
+
+    [Header("Turning")]
+    [SerializeField] private Transform characterVisual;
+    [SerializeField] private float turnDuration = 0.35f;
+    [SerializeField] private float backwardTimeBeforeTurn = 0.35f;
+    [SerializeField] private bool turnAroundOnGameplayStart = true;
 
     [Header("Jump")]
     [SerializeField] private float jumpForce = 6f;
@@ -32,8 +39,17 @@ public class PlayerController : MonoBehaviour
     private CapsuleCollider _capsuleCollider;
 
     private Vector2 _moveInput;
+
     private bool _jumpRequested;
     private bool _isSprinting;
+    private bool _isTurning;
+    private bool _controlsEnabled;
+    private bool _startupTurnCompleted;
+
+    private float _backwardTimer;
+
+    private Quaternion _startingVisualLocalRotation;
+    private Coroutine _turnCoroutine;
 
     private static readonly int InputX =
         Animator.StringToHash("InputX");
@@ -53,12 +69,24 @@ public class PlayerController : MonoBehaviour
     private static readonly int IsRunning =
         Animator.StringToHash("isRunning");
 
+    private static readonly int Turn =
+        Animator.StringToHash("Turn");
+
     private void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();
         _capsuleCollider = GetComponent<CapsuleCollider>();
 
+        if (characterVisual == null && playerAnimator != null)
+        {
+            characterVisual = playerAnimator.transform;
+        }
+
+        _startingVisualLocalRotation =
+            characterVisual.localRotation;
+
         _rigidbody.useGravity = true;
+
         _rigidbody.interpolation =
             RigidbodyInterpolation.Interpolate;
 
@@ -76,6 +104,25 @@ public class PlayerController : MonoBehaviour
         moveInputAction.action.Enable();
         sprintInputAction.action.Enable();
         jumpInputAction.action.Enable();
+
+        _moveInput = Vector2.zero;
+        _backwardTimer = 0f;
+
+        if (turnAroundOnGameplayStart &&
+            !_startupTurnCompleted)
+        {
+            _controlsEnabled = false;
+
+            characterVisual.localRotation =
+                _startingVisualLocalRotation;
+
+            _turnCoroutine =
+                StartCoroutine(BeginGameplayTurn());
+        }
+        else
+        {
+            _controlsEnabled = true;
+        }
     }
 
     private void OnDisable()
@@ -83,20 +130,48 @@ public class PlayerController : MonoBehaviour
         moveInputAction.action.Disable();
         sprintInputAction.action.Disable();
         jumpInputAction.action.Disable();
+
+        if (_turnCoroutine != null)
+        {
+            StopCoroutine(_turnCoroutine);
+            _turnCoroutine = null;
+        }
+
+        _controlsEnabled = false;
+        _isTurning = false;
     }
 
     private void Update()
     {
-        _moveInput =
-            moveInputAction.action.ReadValue<Vector2>();
+        if (_controlsEnabled)
+        {
+            _moveInput =
+                moveInputAction.action.ReadValue<Vector2>();
+        }
+        else
+        {
+            _moveInput = Vector2.zero;
+        }
 
         _isSprinting =
-            sprintInputAction.action.IsPressed() &&
-            _moveInput.sqrMagnitude > 0.01f;
+            _controlsEnabled &&
+            !_isTurning &&
+            _moveInput.sqrMagnitude > 0.01f &&
+            sprintInputAction.action.IsPressed();
 
-        if (jumpInputAction.action.WasPressedThisFrame())
+        if (_controlsEnabled &&
+            !_isTurning &&
+            jumpInputAction.action.WasPressedThisFrame())
         {
             _jumpRequested = true;
+        }
+
+        if (_controlsEnabled && !_isTurning)
+        {
+            Vector3 movementDirection =
+                GetWorldMovementDirection();
+
+            HandleFacing(movementDirection);
         }
 
         UpdateLocomotionAnimation();
@@ -104,14 +179,43 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (!_controlsEnabled || _isTurning)
+        {
+            StopHorizontalMovement();
+            return;
+        }
+
         HandleMovement();
         HandleJump();
     }
 
     private void HandleMovement()
     {
-        Vector3 cameraForward = cameraTransform.forward;
-        Vector3 cameraRight = cameraTransform.right;
+        Vector3 movementDirection =
+            GetWorldMovementDirection();
+
+        float currentSpeed =
+            _isSprinting
+                ? runSpeed
+                : walkSpeed;
+
+        Vector3 velocity =
+            movementDirection * currentSpeed;
+
+        velocity.y =
+            _rigidbody.linearVelocity.y;
+
+        _rigidbody.linearVelocity =
+            velocity;
+    }
+
+    private Vector3 GetWorldMovementDirection()
+    {
+        Vector3 cameraForward =
+            cameraTransform.forward;
+
+        Vector3 cameraRight =
+            cameraTransform.right;
 
         cameraForward.y = 0f;
         cameraRight.y = 0f;
@@ -128,28 +232,229 @@ public class PlayerController : MonoBehaviour
             movementDirection.Normalize();
         }
 
-        float currentSpeed =
-            _isSprinting ? runSpeed : walkSpeed;
+        return movementDirection;
+    }
 
-        Vector3 velocity =
-            movementDirection * currentSpeed;
+    private void HandleFacing(
+        Vector3 movementDirection)
+    {
+        if (movementDirection.sqrMagnitude < 0.01f)
+        {
+            _backwardTimer = 0f;
+            return;
+        }
 
-        velocity.y = _rigidbody.linearVelocity.y;
+        // Diagonal input uses the diagonal animations.
+        // It does NOT force Michelle to turn.
+        if (!IsCardinalInput())
+        {
+            _backwardTimer = 0f;
+            return;
+        }
 
-        _rigidbody.linearVelocity = velocity;
+        Vector3 facingDirection =
+            GetFacingDirection();
 
-        // IMPORTANT:
-        // Do NOT rotate Michelle toward movement.
-        //
-        // W = forward animation
-        // S = backwards animation
-        // A/D = strafe animations.
+        float angle =
+            Vector3.Angle(
+                facingDirection,
+                movementDirection
+            );
+
+        // Directly opposite:
+        // walk backwards briefly, then turn around.
+        if (angle > 135f)
+        {
+            _backwardTimer += Time.deltaTime;
+
+            if (_backwardTimer >=
+                backwardTimeBeforeTurn)
+            {
+                StartTurn(movementDirection);
+            }
+
+            return;
+        }
+
+        _backwardTimer = 0f;
+
+        // Roughly perpendicular:
+        // W/S when currently facing left/right,
+        // or A/D when facing up/down.
+        if (angle > 45f)
+        {
+            StartTurn(movementDirection);
+        }
+    }
+
+    private bool IsCardinalInput()
+    {
+        bool horizontal =
+            Mathf.Abs(_moveInput.x) > 0.5f &&
+            Mathf.Abs(_moveInput.y) < 0.1f;
+
+        bool vertical =
+            Mathf.Abs(_moveInput.y) > 0.5f &&
+            Mathf.Abs(_moveInput.x) < 0.1f;
+
+        return horizontal || vertical;
+    }
+
+    private Vector3 GetFacingDirection()
+    {
+        Vector3 forward =
+            characterVisual.forward;
+
+        forward.y = 0f;
+
+        return forward.normalized;
+    }
+
+    private void StartTurn(
+        Vector3 targetDirection)
+    {
+        if (_isTurning)
+        {
+            return;
+        }
+
+        _backwardTimer = 0f;
+
+        _turnCoroutine =
+            StartCoroutine(
+                TurnToDirection(targetDirection)
+            );
+    }
+
+    private IEnumerator BeginGameplayTurn()
+    {
+        // Gameplay Michelle starts facing LEFT.
+        // Turn 180 degrees before controls unlock.
+
+        Vector3 startingDirection =
+            GetFacingDirection();
+
+        Vector3 oppositeDirection =
+            -startingDirection;
+
+        yield return
+            TurnToDirection(oppositeDirection);
+
+        _startupTurnCompleted = true;
+        _controlsEnabled = true;
+        _turnCoroutine = null;
+    }
+
+    private IEnumerator TurnToDirection(
+        Vector3 targetDirection)
+    {
+        _isTurning = true;
+
+        targetDirection.y = 0f;
+        targetDirection.Normalize();
+
+        Vector3 currentDirection =
+            GetFacingDirection();
+
+        float angle =
+            Vector3.SignedAngle(
+                currentDirection,
+                targetDirection,
+                Vector3.up
+            );
+
+        Quaternion startRotation =
+            characterVisual.rotation;
+
+        Quaternion targetRotation =
+            Quaternion.AngleAxis(
+                angle,
+                Vector3.up
+            ) * startRotation;
+
+        playerAnimator.SetTrigger(Turn);
+
+        float elapsed = 0f;
+
+        while (elapsed < turnDuration)
+        {
+            elapsed += Time.deltaTime;
+
+            float t =
+                Mathf.Clamp01(
+                    elapsed / turnDuration
+                );
+
+            characterVisual.rotation =
+                Quaternion.Slerp(
+                    startRotation,
+                    targetRotation,
+                    t
+                );
+
+            yield return null;
+        }
+
+        characterVisual.rotation =
+            targetRotation;
+
+        _isTurning = false;
+        _turnCoroutine = null;
     }
 
     private void UpdateLocomotionAnimation()
     {
+        if (_isTurning)
+        {
+            playerAnimator.SetFloat(
+                InputMagnitude,
+                0f,
+                animationDampTime,
+                Time.deltaTime
+            );
+
+            playerAnimator.SetBool(
+                IsIdle,
+                false
+            );
+
+            playerAnimator.SetBool(
+                IsWalking,
+                false
+            );
+
+            playerAnimator.SetBool(
+                IsRunning,
+                false
+            );
+
+            return;
+        }
+
+        Vector3 movementDirection =
+            GetWorldMovementDirection();
+
         bool isMoving =
-            _moveInput.sqrMagnitude > 0.01f;
+            movementDirection.sqrMagnitude >
+            0.01f;
+
+        float animationX = 0f;
+        float animationY = 0f;
+
+        if (isMoving)
+        {
+            // THIS is the important part:
+            // convert WORLD movement into movement
+            // relative to Michelle's current facing.
+            Vector3 localMovement =
+                characterVisual
+                    .InverseTransformDirection(
+                        movementDirection
+                    );
+
+            animationX = localMovement.x;
+            animationY = localMovement.z;
+        }
 
         float targetMagnitude;
 
@@ -168,14 +473,14 @@ public class PlayerController : MonoBehaviour
 
         playerAnimator.SetFloat(
             InputX,
-            _moveInput.x,
+            animationX,
             animationDampTime,
             Time.deltaTime
         );
 
         playerAnimator.SetFloat(
             InputY,
-            _moveInput.y,
+            animationY,
             animationDampTime,
             Time.deltaTime
         );
@@ -203,6 +508,18 @@ public class PlayerController : MonoBehaviour
         );
     }
 
+    private void StopHorizontalMovement()
+    {
+        Vector3 velocity =
+            _rigidbody.linearVelocity;
+
+        velocity.x = 0f;
+        velocity.z = 0f;
+
+        _rigidbody.linearVelocity =
+            velocity;
+    }
+
     private void HandleJump()
     {
         if (!_jumpRequested)
@@ -222,7 +539,8 @@ public class PlayerController : MonoBehaviour
 
         velocity.y = 0f;
 
-        _rigidbody.linearVelocity = velocity;
+        _rigidbody.linearVelocity =
+            velocity;
 
         _rigidbody.AddForce(
             Vector3.up * jumpForce,
