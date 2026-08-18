@@ -12,7 +12,8 @@ public class PlayerController : MonoBehaviour
 
     [Header("Turning")]
     [SerializeField] private Transform characterVisual;
-    [SerializeField] private float turnDuration = 0.35f;
+    [SerializeField] private float turn90Duration = 0.35f;
+    [SerializeField] private float turn180Duration = 0.55f;
     [SerializeField] private float backwardTimeBeforeTurn = 0.35f;
     [SerializeField] private bool turnAroundOnGameplayStart = true;
 
@@ -69,8 +70,11 @@ public class PlayerController : MonoBehaviour
     private static readonly int IsRunning =
         Animator.StringToHash("isRunning");
 
-    private static readonly int Turn =
-        Animator.StringToHash("Turn");
+    private static readonly int Turn90 =
+        Animator.StringToHash("Turn90");
+
+    private static readonly int Turn180 =
+        Animator.StringToHash("Turn180");
 
     private void Awake()
     {
@@ -93,10 +97,7 @@ public class PlayerController : MonoBehaviour
         _rigidbody.collisionDetectionMode =
             CollisionDetectionMode.Continuous;
 
-        _rigidbody.constraints =
-            RigidbodyConstraints.FreezeRotationX |
-            RigidbodyConstraints.FreezeRotationY |
-            RigidbodyConstraints.FreezeRotationZ;
+        _rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
     }
 
     private void OnEnable()
@@ -143,15 +144,7 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        if (_controlsEnabled)
-        {
-            _moveInput =
-                moveInputAction.action.ReadValue<Vector2>();
-        }
-        else
-        {
-            _moveInput = Vector2.zero;
-        }
+        _moveInput = _controlsEnabled ? moveInputAction.action.ReadValue<Vector2>() : Vector2.zero;
 
         _isSprinting =
             _controlsEnabled &&
@@ -239,6 +232,12 @@ public class PlayerController : MonoBehaviour
         Vector3 movementDirection)
     {
         if (movementDirection.sqrMagnitude < 0.01f)
+        {
+            _backwardTimer = 0f;
+            return;
+        }
+        
+        if (!IsGrounded())
         {
             _backwardTimer = 0f;
             return;
@@ -372,17 +371,34 @@ public class PlayerController : MonoBehaviour
                 Vector3.up
             ) * startRotation;
 
-        playerAnimator.SetTrigger(Turn);
+        float absoluteAngle = Mathf.Abs(angle);
+
+        bool is180Turn =
+            absoluteAngle > 135f;
+
+        float currentTurnDuration =
+            is180Turn
+                ? turn180Duration
+                : turn90Duration;
+
+        playerAnimator.ResetTrigger(Turn90);
+        playerAnimator.ResetTrigger(Turn180);
+
+        playerAnimator.SetTrigger(
+            is180Turn
+                ? Turn180
+                : Turn90
+        );
 
         float elapsed = 0f;
 
-        while (elapsed < turnDuration)
+        while (elapsed < currentTurnDuration)
         {
             elapsed += Time.deltaTime;
 
             float t =
                 Mathf.Clamp01(
-                    elapsed / turnDuration
+                    elapsed / currentTurnDuration
                 );
 
             characterVisual.rotation =
