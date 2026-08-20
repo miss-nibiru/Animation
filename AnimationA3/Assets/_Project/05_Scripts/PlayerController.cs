@@ -51,6 +51,8 @@ public class PlayerController : MonoBehaviour
     private bool _startupTurnCompleted;
     private bool _isClimbing;
 
+    private AutomaticClimbTrigger _activeClimbTrigger;
+
     private float _backwardTimer;
 
     private Quaternion _startingVisualLocalRotation;
@@ -156,6 +158,7 @@ public class PlayerController : MonoBehaviour
 
         _controlsEnabled = false;
         _isTurning = false;
+        _activeClimbTrigger = null;
     }
 
     private void Update()
@@ -172,7 +175,11 @@ public class PlayerController : MonoBehaviour
             !_isTurning &&
             jumpInputAction.action.WasPressedThisFrame())
         {
-            _jumpRequested = true;
+            bool startedClimb =
+                _activeClimbTrigger != null &&
+                _activeClimbTrigger.TryStartClimb(this);
+
+            _jumpRequested = !startedClimb;
         }
 
         if (_controlsEnabled && !_isTurning)
@@ -635,6 +642,26 @@ public class PlayerController : MonoBehaviour
         );
     }
     
+    public void EnterClimbTrigger(
+        AutomaticClimbTrigger climbTrigger)
+    {
+        if (climbTrigger == null || _isClimbing)
+        {
+            return;
+        }
+
+        _activeClimbTrigger = climbTrigger;
+    }
+
+    public void ExitClimbTrigger(
+        AutomaticClimbTrigger climbTrigger)
+    {
+        if (_activeClimbTrigger == climbTrigger)
+        {
+            _activeClimbTrigger = null;
+        }
+    }
+
     public bool BeginAutomaticClimb(
         Transform climbStart,
         Transform climbEnd)
@@ -670,6 +697,7 @@ public class PlayerController : MonoBehaviour
     {
         _isClimbing = true;
         _controlsEnabled = false;
+        _activeClimbTrigger = null;
 
         _moveInput = Vector2.zero;
         _jumpRequested = false;

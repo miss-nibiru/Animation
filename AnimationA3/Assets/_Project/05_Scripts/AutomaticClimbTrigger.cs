@@ -14,23 +14,55 @@ public class AutomaticClimbTrigger : MonoBehaviour
 
     private void Reset()
     {
-        Collider triggerCollider = GetComponent<Collider>();
-        triggerCollider.isTrigger = true;
+        GetComponent<Collider>().isTrigger = true;
+    }
+
+    private void Awake()
+    {
+        GetComponent<Collider>().isTrigger = true;
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        if (oneShot && _hasTriggered)
-        {
-            return;
-        }
-
         PlayerController player =
             other.GetComponentInParent<PlayerController>();
 
         if (player == null)
         {
             return;
+        }
+
+        player.EnterClimbTrigger(this);
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        PlayerController player =
+            other.GetComponentInParent<PlayerController>();
+
+        if (player == null)
+        {
+            return;
+        }
+
+        player.ExitClimbTrigger(this);
+    }
+
+    public bool TryStartClimb(PlayerController player)
+    {
+        if (player == null)
+        {
+            return false;
+        }
+
+        if (oneShot && _hasTriggered)
+        {
+            return false;
+        }
+
+        if (climbStart == null || climbEnd == null)
+        {
+            return false;
         }
 
         bool started =
@@ -43,5 +75,7 @@ public class AutomaticClimbTrigger : MonoBehaviour
         {
             _hasTriggered = true;
         }
+
+        return started;
     }
 }
