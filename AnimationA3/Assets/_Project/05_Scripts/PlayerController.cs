@@ -46,6 +46,7 @@ public class PlayerController : MonoBehaviour
     private bool _isTurning;
     private bool _controlsEnabled;
     private bool _startupTurnCompleted;
+    private bool _isDancing;
 
     private float _backwardTimer;
 
@@ -84,6 +85,8 @@ public class PlayerController : MonoBehaviour
 
     private static readonly int IsFalling =
         Animator.StringToHash("isFalling");
+    private static readonly int IsDancingParameter =
+        Animator.StringToHash("isDancing");
 
     private void Awake()
     {
@@ -153,8 +156,11 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        _moveInput = _controlsEnabled ? moveInputAction.action.ReadValue<Vector2>() : Vector2.zero;
-
+        _moveInput =
+            _controlsEnabled && !_isDancing
+                ? moveInputAction.action.ReadValue<Vector2>()
+                : Vector2.zero;
+        
         _isSprinting =
             _controlsEnabled &&
             !_isTurning &&
@@ -162,8 +168,10 @@ public class PlayerController : MonoBehaviour
             sprintInputAction.action.IsPressed();
 
         if (_controlsEnabled &&
+            !_isDancing &&
             !_isTurning &&
             jumpInputAction.action.WasPressedThisFrame())
+            
         {
             _jumpRequested = true;
         }
@@ -183,6 +191,12 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        if (_isDancing)
+        {
+            StopHorizontalMovement();
+            return;
+        }
+        
         if (!_controlsEnabled || _isTurning)
         {
             StopHorizontalMovement();
@@ -578,6 +592,33 @@ public class PlayerController : MonoBehaviour
             IsFalling,
             falling
         );
+    }
+    
+    public bool IsDancing => _isDancing;
+
+    public void ToggleDance()
+    {
+        _isDancing = !_isDancing;
+
+        playerAnimator.SetBool(
+            IsDancingParameter,
+            _isDancing
+        );
+
+        _moveInput = Vector2.zero;
+        _jumpRequested = false;
+        _isSprinting = false;
+        _backwardTimer = 0f;
+
+        if (_turnCoroutine != null)
+        {
+            StopCoroutine(_turnCoroutine);
+            _turnCoroutine = null;
+        }
+
+        _isTurning = false;
+
+        StopHorizontalMovement();
     }
     
     private void HandleJump()
