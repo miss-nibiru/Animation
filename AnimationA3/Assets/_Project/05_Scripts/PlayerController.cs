@@ -19,9 +19,6 @@ public class PlayerController : MonoBehaviour
 
     [Header("Jump")]
     [SerializeField] private float jumpForce = 6f;
-    
-    [Header("Climb")]
-    [SerializeField] private float climbDuration = 1.15f;
 
     [Header("References")]
     [SerializeField] private Transform cameraTransform;
@@ -49,9 +46,6 @@ public class PlayerController : MonoBehaviour
     private bool _isTurning;
     private bool _controlsEnabled;
     private bool _startupTurnCompleted;
-    private bool _isClimbing;
-
-    private AutomaticClimbTrigger _activeClimbTrigger;
 
     private float _backwardTimer;
 
@@ -90,9 +84,6 @@ public class PlayerController : MonoBehaviour
 
     private static readonly int IsFalling =
         Animator.StringToHash("isFalling");
-    
-    private static readonly int Climb =
-        Animator.StringToHash("Climb");
 
     private void Awake()
     {
@@ -158,7 +149,6 @@ public class PlayerController : MonoBehaviour
 
         _controlsEnabled = false;
         _isTurning = false;
-        _activeClimbTrigger = null;
     }
 
     private void Update()
@@ -175,11 +165,7 @@ public class PlayerController : MonoBehaviour
             !_isTurning &&
             jumpInputAction.action.WasPressedThisFrame())
         {
-            bool startedClimb =
-                _activeClimbTrigger != null &&
-                _activeClimbTrigger.TryStartClimb(this);
-
-            _jumpRequested = !startedClimb;
+            _jumpRequested = true;
         }
 
         if (_controlsEnabled && !_isTurning)
@@ -197,11 +183,6 @@ public class PlayerController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (_isClimbing)
-        {
-            return;
-        }
-
         if (!_controlsEnabled || _isTurning)
         {
             StopHorizontalMovement();
@@ -450,30 +431,6 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateLocomotionAnimation()
     {
-        if (_isClimbing)
-        {
-            playerAnimator.SetFloat(
-                InputMagnitude,
-                0f
-            );
-
-            playerAnimator.SetBool(
-                IsIdle,
-                false
-            );
-
-            playerAnimator.SetBool(
-                IsWalking,
-                false
-            );
-
-            playerAnimator.SetBool(
-                IsRunning,
-                false
-            );
-
-            return;
-        }
         
         if (_isTurning)
         {
@@ -593,25 +550,6 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateJumpAnimation()
     {
-        if (_isClimbing)
-        {
-            playerAnimator.SetBool(
-                IsJumping,
-                false
-            );
-
-            playerAnimator.SetBool(
-                IsFalling,
-                false
-            );
-
-            playerAnimator.SetBool(
-                IsGroundedParameter,
-                false
-            );
-
-            return;
-        }
         
         bool grounded = IsGrounded();
 
@@ -640,160 +578,6 @@ public class PlayerController : MonoBehaviour
             IsFalling,
             falling
         );
-    }
-    
-    public void EnterClimbTrigger(
-        AutomaticClimbTrigger climbTrigger)
-    {
-        if (climbTrigger == null || _isClimbing)
-        {
-            return;
-        }
-
-        _activeClimbTrigger = climbTrigger;
-    }
-
-    public void ExitClimbTrigger(
-        AutomaticClimbTrigger climbTrigger)
-    {
-        if (_activeClimbTrigger == climbTrigger)
-        {
-            _activeClimbTrigger = null;
-        }
-    }
-
-    public bool BeginAutomaticClimb(
-        Transform climbStart,
-        Transform climbEnd)
-    {
-        if (_isClimbing)
-        {
-            return false;
-        }
-
-        if (climbStart == null || climbEnd == null)
-        {
-            return false;
-        }
-
-        if (!IsGrounded())
-        {
-            return false;
-        }
-
-        StartCoroutine(
-            ClimbRoutine(
-                climbStart,
-                climbEnd
-            )
-        );
-
-        return true;
-    }
-    
-    private IEnumerator ClimbRoutine(
-        Transform climbStart,
-        Transform climbEnd)
-    {
-        _isClimbing = true;
-        _controlsEnabled = false;
-        _activeClimbTrigger = null;
-
-        _moveInput = Vector2.zero;
-        _jumpRequested = false;
-        _isSprinting = false;
-        _backwardTimer = 0f;
-
-        if (_turnCoroutine != null)
-        {
-            StopCoroutine(_turnCoroutine);
-            _turnCoroutine = null;
-        }
-
-        _isTurning = false;
-
-        _rigidbody.linearVelocity =
-            Vector3.zero;
-
-        _rigidbody.useGravity = false;
-
-        // Put Michelle exactly where the climb
-        // animation is supposed to begin.
-        _rigidbody.position =
-            climbStart.position;
-
-        // Face the direction stored by ClimbStart.
-        characterVisual.rotation =
-            climbStart.rotation;
-
-        playerAnimator.SetFloat(
-            InputMagnitude,
-            0f
-        );
-
-        playerAnimator.SetBool(
-            IsIdle,
-            false
-        );
-
-        playerAnimator.SetBool(
-            IsWalking,
-            false
-        );
-
-        playerAnimator.SetBool(
-            IsRunning,
-            false
-        );
-
-        playerAnimator.SetTrigger(Climb);
-
-        Vector3 startPosition =
-            climbStart.position;
-
-        Vector3 endPosition =
-            climbEnd.position;
-
-        float elapsed = 0f;
-
-        while (elapsed < climbDuration)
-        {
-            elapsed += Time.fixedDeltaTime;
-
-            float t =
-                Mathf.Clamp01(
-                    elapsed / climbDuration
-                );
-
-            // Smooth start/end instead of
-            // constant robotic movement.
-            float smoothT =
-                t * t * (3f - 2f * t);
-
-            Vector3 newPosition =
-                Vector3.Lerp(
-                    startPosition,
-                    endPosition,
-                    smoothT
-                );
-
-            _rigidbody.MovePosition(
-                newPosition
-            );
-
-            yield return new WaitForFixedUpdate();
-        }
-
-        _rigidbody.position =
-            endPosition;
-
-        _rigidbody.linearVelocity =
-            Vector3.zero;
-
-        _rigidbody.useGravity = true;
-
-        _isClimbing = false;
-        _controlsEnabled = true;
     }
     
     private void HandleJump()
