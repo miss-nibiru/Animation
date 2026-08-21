@@ -1,30 +1,20 @@
-using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 [RequireComponent(typeof(Collider))]
 public class SpeakerDanceInteractable : BaseInteractable
 {
-    [Header("Prompt")]
+    [Header("Prompt Images")]
     [SerializeField] private GameObject promptRoot;
-    [SerializeField] private TMP_Text promptText;
-
-    [SerializeField] private string startDancePrompt =
-        "Press E to PARTAY!";
-
-    [SerializeField] private string stopDancePrompt =
-        "Press E to STAHP!";
+    [SerializeField] private GameObject pressDanceImage;
+    [SerializeField] private GameObject pressStopImage;
 
     private PlayerController _player;
 
     private void Awake()
     {
         GetComponent<Collider>().isTrigger = true;
-
-        if (promptRoot != null)
-        {
-            promptRoot.SetActive(false);
-        }
+        HidePrompt();
     }
 
     private void Update()
@@ -49,7 +39,7 @@ public class SpeakerDanceInteractable : BaseInteractable
         }
 
         _player.ToggleDance();
-        UpdatePrompt();
+        UpdatePromptImages();
     }
 
     public override bool CanInteract()
@@ -74,7 +64,7 @@ public class SpeakerDanceInteractable : BaseInteractable
             promptRoot.SetActive(true);
         }
 
-        UpdatePrompt();
+        UpdatePromptImages();
     }
 
     private void OnTriggerExit(Collider other)
@@ -93,23 +83,40 @@ public class SpeakerDanceInteractable : BaseInteractable
         }
 
         _player = null;
+        HidePrompt();
+    }
 
+    private void UpdatePromptImages()
+    {
+        bool isDancing =
+            _player != null && _player.IsDancing;
+
+        if (pressDanceImage != null)
+        {
+            pressDanceImage.SetActive(!isDancing);
+        }
+
+        if (pressStopImage != null)
+        {
+            pressStopImage.SetActive(isDancing);
+        }
+    }
+
+    private void HidePrompt()
+    {
         if (promptRoot != null)
         {
             promptRoot.SetActive(false);
         }
-    }
 
-    private void UpdatePrompt()
-    {
-        if (_player == null || promptText == null)
+        if (pressDanceImage != null)
         {
-            return;
+            pressDanceImage.SetActive(false);
         }
 
-        promptText.text =
-            _player.IsDancing
-                ? stopDancePrompt
-                : startDancePrompt;
+        if (pressStopImage != null)
+        {
+            pressStopImage.SetActive(false);
+        }
     }
 }
